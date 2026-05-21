@@ -140,24 +140,32 @@ async function handleBlock(
     };
   }
 
-  // Cancel the order
+  // Cancel the order via GraphQL
   try {
-    const response = await admin.rest.post({
-      path: `orders/${orderId}/cancel`,
-      data: {
-        reason: "fraud",
-        restock: true,
-        email: false,
-        note: "Automatically cancelled by FraudEngine",
-      },
-    });
-
-    if (response.status >= 400) {
-      const body = await response.json();
-      return {
-        success: false,
-        detail: `Cancel failed (${response.status}): ${JSON.stringify(body).slice(0, 200)}`,
-      };
+    const gid = `gid://shopify/Order/${orderId}`;
+    const result = await admin.graphql(
+      `#graphql
+      mutation orderCancel($orderId: ID!, $reason: OrderCancelReason!, $restock: Boolean!, $notifyCustomer: Boolean!, $staffNote: String) {
+        orderCancel(orderId: $orderId, reason: $reason, restock: $restock, notifyCustomer: $notifyCustomer, staffNote: $staffNote) {
+          job { id }
+          orderCancelUserErrors { field message }
+        }
+      }`,
+      {
+        variables: {
+          orderId: gid,
+          reason: "FRAUD",
+          restock: true,
+          notifyCustomer: false,
+          staffNote: "Automatically cancelled by FraudEngine",
+        },
+      }
+    );
+    const data = await result.json();
+    const errors = data?.data?.orderCancel?.orderCancelUserErrors ?? [];
+    if (errors.length) {
+      const msg = errors.map((e: { message: string }) => e.message).join("; ");
+      return { success: false, detail: `Cancel failed: ${msg}` };
     }
     return { success: true, detail: "Tagged fraud-block and order cancelled" };
   } catch (err) {

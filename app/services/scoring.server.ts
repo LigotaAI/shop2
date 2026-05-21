@@ -7,11 +7,8 @@
  *
  * Implements:
  *   - retry with exponential back-off (max 3 attempts)
- *   - idempotency keyed by Shopify order ID
- *   - structured logging
+ *   - graceful fallback when no _leonix_request_id present
  */
-
-import type { OrderLinkRow, VisitorIdentifierRow } from "~/db.server";
 
 const FRAUD_API_BASE = (process.env.FRAUD_API_BASE_URL ?? "http://localhost:8000").replace(/\/$/, "");
 const FRAUD_API_KEY  = process.env.FRAUD_API_KEY ?? "";
@@ -57,30 +54,29 @@ export function normalizeShopifyOrder(
     ? (raw.risk_assessment as Array<Record<string, unknown>>)[0]
     : null;
 
-  // Extract _leonix_request_id from cart_attributes
   const cartAttrs = Array.isArray(raw.cart_attributes)
     ? (raw.cart_attributes as Array<{ name: string; value: string }>)
     : [];
-  const leonixAttr    = cartAttrs.find((a) => a.name === "_leonix_request_id");
+  const leonixAttr      = cartAttrs.find((a) => a.name === "_leonix_request_id");
   const leonixRequestId = leonixAttr?.value ?? null;
 
   return {
-    orderId:          String(raw.id ?? ""),
-    shopifyShop:      String(raw.shop_domain ?? ""),
-    email:            (raw.email as string | null) ?? null,
-    phone:            (raw.phone as string | null) ?? null,
-    totalPrice:       Number(raw.total_price ?? 0),
-    currency:         String(raw.currency ?? "USD"),
-    ip:               (raw.browser_ip as string | null) ?? null,
-    userId:           (raw.customer as Record<string, unknown> | null)?.id
-                        ? String((raw.customer as Record<string, unknown>).id)
-                        : null,
-    cartToken:        (raw.cart_token as string | null) ?? null,
+    orderId:         String(raw.id ?? ""),
+    shopifyShop:     String(raw.shop_domain ?? ""),
+    email:           (raw.email as string | null) ?? null,
+    phone:           (raw.phone as string | null) ?? null,
+    totalPrice:      Number(raw.total_price ?? 0),
+    currency:        String(raw.currency ?? "USD"),
+    ip:              (raw.browser_ip as string | null) ?? null,
+    userId:          (raw.customer as Record<string, unknown> | null)?.id
+                       ? String((raw.customer as Record<string, unknown>).id)
+                       : null,
+    cartToken:       (raw.cart_token as string | null) ?? null,
     leonixRequestId,
-    createdAt:        String(raw.created_at ?? new Date().toISOString()),
-    billingAddress:   billingAddr  ? (billingAddr  as Record<string, string>) : null,
-    shippingAddress:  shippingAddr ? (shippingAddr as Record<string, string>) : null,
-    lineItems:        lineItems.map((item) => ({
+    createdAt:       String(raw.created_at ?? new Date().toISOString()),
+    billingAddress:  billingAddr  ? (billingAddr  as Record<string, string>) : null,
+    shippingAddress: shippingAddr ? (shippingAddr as Record<string, string>) : null,
+    lineItems:       lineItems.map((item) => ({
       title:    String((item as Record<string, unknown>).title    ?? ""),
       quantity: Number((item as Record<string, unknown>).quantity ?? 1),
       price:    Number((item as Record<string, unknown>).price    ?? 0),
@@ -99,40 +95,34 @@ export async function callFraudScore(
     return { request_id: "", risk_score: 0, decision: "allow", reasons: [] };
   }
 
-  const email = order.email ?? "unknown@example.com";
+  const email  = order.email ?? "unknown@example.com";
   const params = new URLSearchParams({
     fingure_print_request_id: order.leonixRequestId,
     email,
   });
+  const url = `${FRAUD_API_BASE}/api/v1/fp/verify?${params}`;
 
-  const url = ;
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const res = await fetch(url, {
         method: "GET",
-        headers: {
-          "X-Tenant-Key": FRAUD_API_KEY,
-        },
+        headers: { "X-Tenant-Key": FRAUD_API_KEY },
         signal: AbortSignal.timeout(10_000),
       });
 
       if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        throw new Error();
+        const body = await res.text().catch(() => "");
+        throw new Error(`Fraud API responded ${res.status}: ${body.slice(0, 200)}`);
       }
 
       const data = (await res.json()) as ScoreResult;
-      console.info(
-        
-      );
+      console.info(`[scoring] order=${order.orderId} score=${data.risk_score} decision=${data.decision}`);
       return data;
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      console.error(
-        
-      );
+      console.error(`[scoring] attempt ${attempt}/${MAX_RETRIES} failed for order=${order.orderId}: ${lastError.message}`);
       if (attempt < MAX_RETRIES) {
         await sleep(BASE_DELAY_MS * 2 ** (attempt - 1));
       }

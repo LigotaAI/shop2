@@ -26,32 +26,32 @@ import {
 } from '~/services/shopify-actions.server';
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { topic, shop, session, payload, admin } =
+  const { topic, shop, payload, admin } =
     await authenticate.webhook(request);
 
-  console.info();
+  console.info(`[webhook] topic=${topic} shop=${shop}`);
 
   switch (topic) {
     case 'ORDERS_CREATE':
       void handleOrderCreate(shop, payload as Record<string, unknown>, admin).catch(
-        (err) => console.error()
+        (err) => console.error(`[webhook] ORDERS_CREATE error shop=${shop}: ${err}`)
       );
       break;
 
     case 'ORDERS_UPDATED':
       void handleOrderUpdated(shop, payload as Record<string, unknown>).catch(
-        (err) => console.error()
+        (err) => console.error(`[webhook] ORDERS_UPDATED error shop=${shop}: ${err}`)
       );
       break;
 
     case 'REFUNDS_CREATE':
       void handleRefundCreate(shop, payload as Record<string, unknown>).catch(
-        (err) => console.error()
+        (err) => console.error(`[webhook] REFUNDS_CREATE error shop=${shop}: ${err}`)
       );
       break;
 
     default:
-      console.warn();
+      console.warn(`[webhook] Unhandled topic: ${topic}`);
   }
 
   return new Response(null, { status: 200 });
@@ -66,11 +66,11 @@ async function handleOrderCreate(
 ) {
   const order   = normalizeShopifyOrder({ ...rawOrder, shop_domain: shop });
   const orderId = order.orderId;
-  const idempotencyKey = ;
+  const idempotencyKey = `${shop}:order:${orderId}`;
 
   const tenantId = await resolveTenantByShop(shop);
   if (!tenantId) {
-    console.warn();
+    console.warn(`[webhook] No tenant mapped to shop=${shop}`);
     return;
   }
 
@@ -95,16 +95,15 @@ async function handleOrderCreate(
   });
 
   if (orderLink.decision) {
-    console.info();
+    console.info(`[webhook] order ${orderId} already scored, skipping`);
     return;
   }
 
-  // Call GET /api/v1/fp/verify with leonixRequestId from cart_attributes
   let scoreResult;
   try {
     scoreResult = await callFraudScore(order);
   } catch (err) {
-    console.error();
+    console.error(`[webhook] scoring failed for order ${orderId}: ${err}`);
     await updateOrderLinkAction(orderLink.id, 'failed', String(err));
     return;
   }
@@ -117,7 +116,7 @@ async function handleOrderCreate(
   );
 
   if (!admin) {
-    console.warn();
+    console.warn(`[webhook] No admin session for shop=${shop}, skipping action`);
     await updateOrderLinkAction(orderLink.id, 'skipped', 'No admin session');
     return;
   }
@@ -125,7 +124,7 @@ async function handleOrderCreate(
   await executeDecision(admin, orderLink.id, orderId, scoreResult.decision as Decision);
 
   console.info(
-    
+    `[webhook] order=${orderId} score=${scoreResult.risk_score} decision=${scoreResult.decision}`
   );
 }
 
@@ -137,7 +136,9 @@ async function handleOrderUpdated(shop: string, rawOrder: Record<string, unknown
 
   const db = getPool();
   await db.query(
-    ,
+    `UPDATE order_link
+        SET raw_order = $3, updated_at = now()
+      WHERE shopify_order_id = $1 AND shopify_shop = $2`,
     [orderId, shop, JSON.stringify(rawOrder)]
   );
 }
@@ -150,8 +151,11 @@ async function handleRefundCreate(shop: string, rawRefund: Record<string, unknow
 
   const db = getPool();
   await db.query(
-    ,
-    [orderId, shop, ]
+    `UPDATE order_link
+        SET action_detail = CONCAT(COALESCE(action_detail,''), $3),
+            updated_at = now()
+      WHERE shopify_order_id = $1 AND shopify_shop = $2`,
+    [orderId, shop, ` | refund_id:${rawRefund.id}`]
   );
 }
 
@@ -160,7 +164,10 @@ async function handleRefundCreate(shop: string, rawRefund: Record<string, unknow
 async function resolveTenantByShop(shop: string): Promise<string | null> {
   const db = getPool();
   const res = await db.query<{ tenant_id: string }>(
-    ,
+    `SELECT tenant_id FROM visitor_identifier
+      WHERE shopify_shop = $1
+      ORDER BY last_seen DESC NULLS LAST
+      LIMIT 1`,
     [shop]
   );
   return res.rows[0]?.tenant_id ?? null;

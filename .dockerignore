@@ -1,0 +1,7 @@
+node_modules
+build
+.env
+sessions.db
+inject_widget.js
+*.png
+*.jpg
