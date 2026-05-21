@@ -10,7 +10,7 @@ COPY . .
 RUN npm run build
 
 # ── Stage 2: production image ─────────────────────────────────────────────────
-FROM node:20-slim AS runner
+FROM node:20 AS runner
 
 WORKDIR /app
 
