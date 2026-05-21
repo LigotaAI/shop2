@@ -1,4 +1,5 @@
-FROM node:20-slim
+# ── Stage 1: build ───────────────────────────────────────────────────────────
+FROM node:20 AS builder
 
 WORKDIR /app
 
@@ -8,7 +9,15 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-RUN npm prune --omit=dev
+# ── Stage 2: production image ─────────────────────────────────────────────────
+FROM node:20-slim AS runner
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+COPY --from=builder /app/build ./build
 
 ENV NODE_ENV=production
 ENV PORT=8080
