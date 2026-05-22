@@ -2,13 +2,12 @@
 
 name = "Leonix Fraud Engine"
 client_id = "ccedb919ae2e9f610583c98a7839e5c1"
-application_url = "https://placeholder.example.com"
+application_url = "https://shopify-app-khnbyrj5aa-uc.a.run.app"
 embedded = true
 
 [build]
 automatically_update_urls_on_dev = true
 dev_store_url = "test-leonix.myshopify.com"
-include_config_on_deploy = true
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
@@ -16,9 +15,9 @@ scopes = "write_orders,read_orders,write_fulfillments,read_customers,read_themes
 
 [auth]
 redirect_urls = [
-  "https://placeholder.example.com/auth/callback",
-  "https://placeholder.example.com/auth/shopify/callback",
-  "https://placeholder.example.com/exitiframe",
+  "https://shopify-app-khnbyrj5aa-uc.a.run.app/auth/callback",
+  "https://shopify-app-khnbyrj5aa-uc.a.run.app/auth/shopify/callback",
+  "https://shopify-app-khnbyrj5aa-uc.a.run.app/exitiframe",
 ]
 
 [webhooks]
