@@ -14,9 +14,10 @@ function buildDbUrl(): string {
   const name = process.env.DB_NAME || "fraudengine";
   const user = encodeURIComponent(process.env.DB_USER || "postgres");
   const pass = encodeURIComponent(process.env.DB_PASSWORD || "");
-  // Unix socket path (Cloud SQL on Cloud Run)
+  // Unix socket path (Cloud SQL on Cloud Run): use localhost in URL authority,
+  // pass actual socket dir via ?host= query param (pg-connection-string reads it)
   if (host.startsWith("/")) {
-    return `postgresql://${user}:${pass}@/${name}?host=${encodeURIComponent(host)}`;
+    return `postgresql://${user}:${pass}@localhost/${name}?host=${host}`;
   }
   return `postgresql://${user}:${pass}@${host}:${port}/${name}`;
 }
