@@ -5,27 +5,13 @@ import {
   shopifyApp,
 } from "@shopify/shopify-app-remix/server";
 import type { Session } from "@shopify/shopify-api";
-import { PostgreSQLSessionStorage } from "@shopify/shopify-app-session-storage-postgresql";
 import { SQLiteSessionStorage } from "@shopify/shopify-app-session-storage-sqlite";
-
-function buildDbUrl(): string {
-  const host = process.env.DB_HOST || "localhost";
-  const port = process.env.DB_PORT || "5432";
-  const name = process.env.DB_NAME || "fraudengine";
-  const user = encodeURIComponent(process.env.DB_USER || "postgres");
-  const pass = encodeURIComponent(process.env.DB_PASSWORD || "");
-  // Unix socket path (Cloud SQL on Cloud Run): use localhost in URL authority,
-  // pass actual socket dir via ?host= query param (pg-connection-string reads it)
-  if (host.startsWith("/")) {
-    return `postgresql://${user}:${pass}@localhost/${name}?host=${host}`;
-  }
-  return `postgresql://${user}:${pass}@${host}:${port}/${name}`;
-}
+import { PgSessionStorage } from "./pg-session-storage.server";
 
 const appSessionStorage =
   process.env.NODE_ENV !== "production"
     ? new SQLiteSessionStorage("./sessions.db")
-    : new PostgreSQLSessionStorage(buildDbUrl());
+    : new PgSessionStorage();
 
 // ── Storefront widget injection ───────────────────────────────────────────────
 
