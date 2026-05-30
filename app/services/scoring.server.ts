@@ -57,7 +57,10 @@ export function normalizeShopifyOrder(
   const cartAttrs = Array.isArray(raw.cart_attributes)
     ? (raw.cart_attributes as Array<{ name: string; value: string }>)
     : [];
-  const leonixAttr      = cartAttrs.find((a) => a.name === "_leonix_request_id");
+  const noteAttrs = Array.isArray(raw.note_attributes)
+    ? (raw.note_attributes as Array<{ name: string; value: string }>)
+    : [];
+  const leonixAttr      = [...cartAttrs, ...noteAttrs].find((a) => a.name === "_leonix_request_id");
   const leonixRequestId = leonixAttr?.value ?? null;
 
   return {
