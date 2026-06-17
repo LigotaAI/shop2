@@ -16,6 +16,7 @@ const appSessionStorage =
 // ── Storefront widget injection ───────────────────────────────────────────────
 
 const SNIPPET_MARKER = "<!-- leonix-fraud-engine -->";
+const SNIPPET_END = "<!-- /leonix-fraud-engine -->";
 const FPJS_PUBLIC_KEY = process.env.FPJS_PUBLIC_KEY || "lybk8D8ZmpCZhhwO8gvZ";
 const API_VERSION = "2024-10";
 
@@ -23,7 +24,7 @@ function buildFpjsSnippet(): string {
   return `${SNIPPET_MARKER}
 <script>
   (function(){
-    import("https://cdn.leonix.io/fpjs/v3/${FPJS_PUBLIC_KEY}.js")
+    import("https://fpjscdn.net/v3/${FPJS_PUBLIC_KEY}")
       .then(function(M){ return M.load({ region:"ap" }); })
       .then(function(fp){ return fp.get(); })
       .then(function(r){
@@ -36,7 +37,7 @@ function buildFpjsSnippet(): string {
       .catch(function(e){ console.debug("[leonix]",e); });
   })();
 </script>
-<!-- /leonix-fraud-engine -->`;
+${SNIPPET_END}`;
 }
 
 export async function injectStorefrontWidget(session: Session): Promise<void> {
@@ -67,14 +68,13 @@ export async function injectStorefrontWidget(session: Session): Promise<void> {
   const assetData = (await assetRes.json()) as { asset?: { value?: string } };
   const current = assetData.asset?.value ?? "";
 
-  if (current.includes(SNIPPET_MARKER)) {
-    console.info(`[afterAuth] Widget already present shop=${shop}`);
-    return;
-  }
-
-  // 3. Inject before </body>
-  const updated = current.replace("</body>", `${buildFpjsSnippet()}\n</body>`);
-  if (updated === current) {
+  // 3. Strip any existing snippet (handles stale/broken versions), then re-inject
+  const stripped = current.replace(
+    new RegExp(`${SNIPPET_MARKER}[\\s\\S]*?${SNIPPET_END}\\n?`, "g"),
+    ""
+  );
+  const updated = stripped.replace("</body>", `${buildFpjsSnippet()}\n</body>`);
+  if (updated === stripped) {
     console.warn(`[afterAuth] </body> not found in theme.liquid shop=${shop}`);
     return;
   }
