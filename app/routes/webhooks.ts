@@ -112,7 +112,8 @@ async function handleOrderCreate(
     orderLink.id,
     scoreResult.risk_score,
     scoreResult.decision,
-    scoreResult.reasons
+    scoreResult.reasons,
+    scoreResult.request_id
   );
 
   if (!admin) {

@@ -210,6 +210,7 @@ export interface OrderLinkRow {
   score: number | null;
   decision: string | null;
   reasons: string[] | null;
+  fraud_request_id: string | null;
   action_status: string | null;
   action_detail: string | null;
   idempotency_key: string | null;
@@ -256,14 +257,15 @@ export async function updateOrderLinkDecision(
   orderLinkId: string,
   score: number,
   decision: string,
-  reasons: string[]
+  reasons: string[],
+  fraudRequestId?: string | null
 ): Promise<void> {
   const db = getPool();
   await db.query(
     `UPDATE order_link
-        SET score = $2, decision = $3, reasons = $4, updated_at = now()
+        SET score = $2, decision = $3, reasons = $4, fraud_request_id = $5, updated_at = now()
       WHERE id = $1`,
-    [orderLinkId, score, decision, JSON.stringify(reasons)]
+    [orderLinkId, score, decision, JSON.stringify(reasons), fraudRequestId ?? null]
   );
 }
 
