@@ -40,6 +40,9 @@ export interface NormalizedOrder {
   shippingAddress: Record<string, string> | null;
   lineItems:       Array<{ title: string; quantity: number; price: number }>;
   riskLevel:       string | null;
+  isNewCustomer:   boolean | null;
+  billingCountry:  string | null;
+  shippingCountry: string | null;
 }
 
 // ── Normalize ─────────────────────────────────────────────────────────────────
@@ -84,7 +87,16 @@ export function normalizeShopifyOrder(
       quantity: Number((item as Record<string, unknown>).quantity ?? 1),
       price:    Number((item as Record<string, unknown>).price    ?? 0),
     })),
-    riskLevel: riskRec ? String(riskRec.recommendation ?? "") : null,
+    riskLevel:       riskRec ? String(riskRec.recommendation ?? "") : null,
+    isNewCustomer:   (raw.customer as Record<string, unknown> | null)
+                       ? Number((raw.customer as Record<string, unknown>).orders_count ?? 0) <= 1
+                       : null,
+    billingCountry:  (billingAddr?.country_code as string | null)
+                       ?? (billingAddr?.country as string | null)
+                       ?? null,
+    shippingCountry: (shippingAddr?.country_code as string | null)
+                       ?? (shippingAddr?.country as string | null)
+                       ?? null,
   };
 }
 
@@ -103,6 +115,10 @@ export async function callFraudScore(
     fingure_print_request_id: order.leonixRequestId,
     email,
   });
+  if (order.totalPrice != null)      params.set("total_price",       String(order.totalPrice));
+  if (order.isNewCustomer != null)   params.set("is_new_customer",   String(order.isNewCustomer));
+  if (order.billingCountry)          params.set("billing_country",   order.billingCountry);
+  if (order.shippingCountry)         params.set("shipping_country",  order.shippingCountry);
   const url = `${FRAUD_API_BASE}/api/v1/fp/verify?${params}`;
 
   let lastError: Error | null = null;
