@@ -69,7 +69,7 @@ export default function Index() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   return (
-    <Page title="Fraud Engine" subtitle={`Store: ${shop}`}>
+    <Page title="FraudSentry" subtitle={`Store: ${shop}`}>
       <Layout>
         {/* Webhook health */}
         <Layout.Section>

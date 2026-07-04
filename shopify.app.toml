@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "ccedb919ae2e9f610583c98a7839e5c1"
-name = "Leonix Fraud Engine"
+name = "FraudSentry"
 application_url = "https://shopify-app-khnbyrj5aa-uc.a.run.app"
 embedded = true
 
