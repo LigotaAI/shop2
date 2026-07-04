@@ -17,7 +17,7 @@ import {
   Divider,
 } from "@shopify/polaris";
 import { authenticate } from "~/shopify.server";
-import { getPool, getRecentOrderLinks, type OrderLinkRow } from "~/db.server";
+import { getShopTenant, getPool, getRecentOrderLinks, type OrderLinkRow } from "~/db.server";
 
 // ── Loader ────────────────────────────────────────────────────────────────────
 
@@ -25,14 +25,22 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shop = session.shop;
 
-  const db = getPool();
-  const tenantRes = await db.query<{ tenant_id: string }>(
-    `SELECT tenant_id FROM visitor_identifier
-      WHERE shopify_shop = $1
-      ORDER BY last_seen DESC NULLS LAST LIMIT 1`,
-    [shop]
-  );
-  const tenantId = tenantRes.rows[0]?.tenant_id ?? null;
+  // Primary: shop_tenants (auto-provisioned on install)
+  let tenantId: string | null = null;
+  const shopTenant = await getShopTenant(shop);
+  if (shopTenant) {
+    tenantId = shopTenant.tenant_id;
+  } else {
+    // Fallback: legacy visitor_identifier lookup for manually mapped shops
+    const db = getPool();
+    const tenantRes = await db.query<{ tenant_id: string }>(
+      `SELECT tenant_id FROM visitor_identifier
+        WHERE shopify_shop = $1
+        ORDER BY last_seen DESC NULLS LAST LIMIT 1`,
+      [shop]
+    );
+    tenantId = tenantRes.rows[0]?.tenant_id ?? null;
+  }
 
   let recentOrders: OrderLinkRow[] = [];
   let webhookHealth: "ok" | "no_data" = "no_data";

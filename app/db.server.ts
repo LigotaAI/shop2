@@ -23,6 +23,50 @@ export function getPool(): Pool {
   return pool;
 }
 
+// ── Shop Tenants ───────────────────────────────────────────────────────────────
+
+export interface ShopTenantRow {
+  shopify_shop: string;
+  tenant_id: string;
+  api_key: string;
+  tenant_name: string;
+  created_at: Date;
+}
+
+export async function ensureShopTenantTable(): Promise<void> {
+  const db = getPool();
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS shop_tenants (
+      shopify_shop TEXT PRIMARY KEY,
+      tenant_id    TEXT NOT NULL,
+      api_key      TEXT NOT NULL,
+      tenant_name  TEXT NOT NULL,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+}
+
+export async function getShopTenant(shop: string): Promise<ShopTenantRow | null> {
+  const db = getPool();
+  const res = await db.query<ShopTenantRow>(
+    `SELECT * FROM shop_tenants WHERE shopify_shop = $1`,
+    [shop]
+  );
+  return res.rows[0] ?? null;
+}
+
+export async function upsertShopTenant(row: Omit<ShopTenantRow, 'created_at'>): Promise<void> {
+  const db = getPool();
+  await db.query(
+    `INSERT INTO shop_tenants (shopify_shop, tenant_id, api_key, tenant_name)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (shopify_shop) DO UPDATE
+       SET tenant_id = EXCLUDED.tenant_id,
+           api_key   = EXCLUDED.api_key`,
+    [row.shopify_shop, row.tenant_id, row.api_key, row.tenant_name]
+  );
+}
+
 // ── Visitor Identifier ─────────────────────────────────────────────────────────
 
 export interface VisitorIdentifierRow {

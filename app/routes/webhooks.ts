@@ -11,6 +11,7 @@ import { type ActionFunctionArgs } from '@remix-run/node';
 import { authenticate } from '~/shopify.server';
 import {
   getPool,
+  getShopTenant,
   resolveVisitorBySignals,
   upsertOrderLink,
   updateOrderLinkDecision,
@@ -47,6 +48,31 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     case 'REFUNDS_CREATE':
       void handleRefundCreate(shop, payload as Record<string, unknown>).catch(
         (err) => console.error(`[webhook] REFUNDS_CREATE error shop=${shop}: ${err}`)
+      );
+      break;
+
+    // ── GDPR mandatory webhooks ────────────────────────────────────────────────
+    case 'CUSTOMERS_DATA_REQUEST':
+      // We don't store PII beyond email/customer_id linked to visitor_identifier.
+      // Acknowledge receipt — no data export required for our use case.
+      console.info(`[webhook] CUSTOMERS_DATA_REQUEST shop=${shop} acknowledged`);
+      break;
+
+    case 'CUSTOMERS_REDACT':
+      void handleCustomersRedact(shop, payload as Record<string, unknown>).catch(
+        (err) => console.error(`[webhook] CUSTOMERS_REDACT error shop=${shop}: ${err}`)
+      );
+      break;
+
+    case 'SHOP_REDACT':
+      void handleShopRedact(shop).catch(
+        (err) => console.error(`[webhook] SHOP_REDACT error shop=${shop}: ${err}`)
+      );
+      break;
+
+    case 'APP_UNINSTALLED':
+      void handleAppUninstalled(shop).catch(
+        (err) => console.error(`[webhook] APP_UNINSTALLED error shop=${shop}: ${err}`)
       );
       break;
 
@@ -162,7 +188,76 @@ async function handleRefundCreate(shop: string, rawRefund: Record<string, unknow
 
 // -- Helpers ------------------------------------------------------------------
 
+// -- GDPR: customers/redact ---------------------------------------------------
+
+async function handleCustomersRedact(
+  shop: string,
+  payload: Record<string, unknown>
+) {
+  const db = getPool();
+  const email = (payload.customer as Record<string, unknown>)?.email as string | undefined;
+  const customerId = String(
+    (payload.customer as Record<string, unknown>)?.id ?? ''
+  );
+
+  // Delete visitor_identifier rows tied to this customer on this shop
+  if (email) {
+    await db.query(
+      `DELETE FROM visitor_identifier WHERE shopify_shop = $1 AND email = $2`,
+      [shop, email]
+    );
+  }
+  if (customerId) {
+    await db.query(
+      `DELETE FROM visitor_identifier WHERE shopify_shop = $1 AND customer_id = $2`,
+      [shop, customerId]
+    );
+  }
+
+  // Redact PII from order_link rows for this shop + customer
+  const orderIds = (payload.orders_to_redact as Array<{ id: number }> | undefined)
+    ?.map((o) => String(o.id)) ?? [];
+  if (orderIds.length) {
+    await db.query(
+      `UPDATE order_link
+          SET raw_order = NULL
+        WHERE shopify_shop = $1 AND shopify_order_id = ANY($2::text[])`,
+      [shop, orderIds]
+    );
+  }
+
+  console.info(`[webhook] CUSTOMERS_REDACT done shop=${shop} email=${email}`);
+}
+
+// -- GDPR: shop/redact --------------------------------------------------------
+
+async function handleShopRedact(shop: string) {
+  const db = getPool();
+
+  // Delete all order data for this shop (48h grace period has passed per Shopify)
+  await db.query(`DELETE FROM order_link WHERE shopify_shop = $1`, [shop]);
+  await db.query(`DELETE FROM visitor_identifier WHERE shopify_shop = $1`, [shop]);
+
+  console.info(`[webhook] SHOP_REDACT done shop=${shop}`);
+}
+
+// -- app/uninstalled ----------------------------------------------------------
+
+async function handleAppUninstalled(shop: string) {
+  // Sessions are cleaned up automatically by the session storage layer.
+  // Log for audit trail — shop data is retained per GDPR grace period rules
+  // until shop/redact fires (Shopify sends that 48h after uninstall).
+  console.info(`[webhook] APP_UNINSTALLED shop=${shop}`);
+}
+
+// -- Helpers ------------------------------------------------------------------
+
 async function resolveTenantByShop(shop: string): Promise<string | null> {
+  // Primary: shop_tenants table (populated on install via afterAuth)
+  const shopTenant = await getShopTenant(shop);
+  if (shopTenant) return shopTenant.tenant_id;
+
+  // Fallback: legacy visitor_identifier lookup (for pre-existing manual mappings)
   const db = getPool();
   const res = await db.query<{ tenant_id: string }>(
     `SELECT tenant_id FROM visitor_identifier

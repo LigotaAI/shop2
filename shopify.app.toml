@@ -14,7 +14,15 @@ api_version = "2024-10"
 
   [[webhooks.subscriptions]]
   uri = "/webhooks"
-  topics = [ "orders/updated", "orders/create", "refunds/create" ]
+  topics = [
+    "orders/create",
+    "orders/updated",
+    "refunds/create",
+    "app/uninstalled",
+    "customers/data_request",
+    "customers/redact",
+    "shop/redact",
+  ]
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes

@@ -7,6 +7,7 @@ import {
 import type { Session } from "@shopify/shopify-api";
 import { SQLiteSessionStorage } from "@shopify/shopify-app-session-storage-sqlite";
 import { PgSessionStorage } from "./pg-session-storage.server";
+import { ensureShopTenantTable, getShopTenant, upsertShopTenant } from "~/db.server";
 
 const appSessionStorage =
   process.env.NODE_ENV !== "production"
@@ -88,6 +89,44 @@ export async function injectStorefrontWidget(session: Session): Promise<void> {
   console.info(`[afterAuth] Injected storefront widget for shop=${shop}`);
 }
 
+// ── Tenant auto-provisioning ──────────────────────────────────────────────────
+
+const FRAUD_API_BASE = process.env.FRAUD_API_BASE_URL || "";
+const INTERNAL_SECRET = process.env.INTERNAL_SECRET || "";
+
+export async function provisionTenantForShop(shop: string): Promise<void> {
+  if (!FRAUD_API_BASE || !INTERNAL_SECRET) {
+    console.warn(`[provision] FRAUD_API_BASE_URL or INTERNAL_SECRET not set — skipping`);
+    return;
+  }
+
+  await ensureShopTenantTable();
+
+  const existing = await getShopTenant(shop);
+  if (existing) {
+    console.info(`[provision] shop=${shop} already mapped to tenant=${existing.tenant_id}`);
+    return;
+  }
+
+  const tenantName = `shopify:${shop}`;
+  const res = await fetch(`${FRAUD_API_BASE}/api/v1/internal/provision-tenant`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Internal-Secret": INTERNAL_SECRET,
+    },
+    body: JSON.stringify({ shopify_shop: shop, tenant_name: tenantName, max_calls: 10000 }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`[provision] fraud engine returned ${res.status} for shop=${shop}`);
+  }
+
+  const data = (await res.json()) as { tenant_id: string; api_key: string; tenant_name: string };
+  await upsertShopTenant({ shopify_shop: shop, tenant_id: data.tenant_id, api_key: data.api_key, tenant_name: data.tenant_name });
+  console.info(`[provision] provisioned tenant=${data.tenant_id} for shop=${shop} (existed=${(data as any).already_existed})`);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const shopify = shopifyApp({
@@ -103,6 +142,9 @@ export const shopify = shopifyApp({
   hooks: {
     afterAuth: async ({ session }) => {
       await shopify.registerWebhooks({ session });
+      await provisionTenantForShop(session.shop).catch((err) =>
+        console.error(`[afterAuth] tenant provision failed shop=${session.shop}:`, err)
+      );
       await injectStorefrontWidget(session).catch((err) =>
         console.error(`[afterAuth] theme injection failed shop=${session.shop}:`, err)
       );
