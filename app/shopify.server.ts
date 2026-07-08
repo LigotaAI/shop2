@@ -37,7 +37,7 @@ function buildFpjsSnippet(): string {
           body:JSON.stringify({attributes:{_leonix_request_id:r.requestId}})
         });
       })
-      .catch(function(e){ console.error("[leonix] FPJS failed:",e); });
+      .catch(function(e){ console.debug("[leonix]",e); });
   })();
 </script>
 ${SNIPPET_END}`;
