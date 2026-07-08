@@ -28,7 +28,7 @@ function buildFpjsSnippet(): string {
 <script>
   (function(){
     import("${FPJS_PROXY}/v3/${FPJS_PUBLIC_KEY}.js")
-      .then(function(M){ return M.load({endpoint:"${FPJS_PROXY}"}); })
+      .then(function(M){ return M.load(); })
       .then(function(fp){ return fp.get(); })
       .then(function(r){
         fetch("/cart/update.js",{
@@ -37,7 +37,7 @@ function buildFpjsSnippet(): string {
           body:JSON.stringify({attributes:{_leonix_request_id:r.requestId}})
         });
       })
-      .catch(function(e){ console.debug("[leonix]",e); });
+      .catch(function(e){ console.error("[leonix] FPJS failed:",e); });
   })();
 </script>
 ${SNIPPET_END}`;
