@@ -21,14 +21,14 @@ const SNIPPET_END = "<!-- /leonix-fraud-engine -->";
 const FPJS_PUBLIC_KEY = process.env.FPJS_PUBLIC_KEY || "lybk8D8ZmpCZhhwO8gvZ";
 const API_VERSION = "2024-10";
 
-const FPJS_CUSTOM_DOMAIN = "https://fp.leonix.io";
+const FPJS_PROXY = "https://cdn.leonix.io/fpjs";
 
 function buildFpjsSnippet(): string {
   return `${SNIPPET_MARKER}
 <script>
   (function(){
-    import("${FPJS_CUSTOM_DOMAIN}/v3/${FPJS_PUBLIC_KEY}")
-      .then(function(M){ return M.load({ endpoint:"${FPJS_CUSTOM_DOMAIN}" }); })
+    import("${FPJS_PROXY}/v3/${FPJS_PUBLIC_KEY}.js")
+      .then(function(M){ return M.load({ endpoint:"${FPJS_PROXY}" }); })
       .then(function(fp){ return fp.get(); })
       .then(function(r){
         fetch("/cart/update.js",{
