@@ -31,13 +31,14 @@ function buildFpjsSnippet(): string {
       .then(function(M){ return M.load(); })
       .then(function(fp){ return fp.get(); })
       .then(function(r){
+        console.log("[leonix] FPJS ok requestId="+r.requestId);
         fetch("/cart/update.js",{
           method:"POST",
           headers:{"Content-Type":"application/json"},
           body:JSON.stringify({attributes:{_leonix_request_id:r.requestId}})
         });
       })
-      .catch(function(e){ console.debug("[leonix]",e); });
+      .catch(function(e){ console.error("[leonix] FPJS failed:",e); });
   })();
 </script>
 ${SNIPPET_END}`;
