@@ -27,22 +27,6 @@ function buildFpjsSnippet(): string {
   return `${SNIPPET_MARKER}
 <script>
   (function(){
-    var PROXY = "${FPJS_PROXY}";
-    var FPJS_RE = /https:\/\/[\w-]+\.api\.fpjs\.io/;
-    var _fetch = window.fetch;
-    window.fetch = function(input, init) {
-      if (typeof input === 'string' && FPJS_RE.test(input))
-        input = input.replace(FPJS_RE, PROXY);
-      else if (input instanceof Request && FPJS_RE.test(input.url))
-        input = new Request(input.url.replace(FPJS_RE, PROXY), input);
-      return _fetch.call(this, input, init);
-    };
-    var _open = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-      if (typeof url === 'string' && FPJS_RE.test(url))
-        url = url.replace(FPJS_RE, PROXY);
-      return _open.call(this, method, url, ...rest);
-    };
     import("${FPJS_PROXY}/v3/${FPJS_PUBLIC_KEY}.js")
       .then(function(M){ return M.load(); })
       .then(function(fp){ return fp.get(); })
