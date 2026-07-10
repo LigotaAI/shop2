@@ -28,7 +28,7 @@ function buildFpjsSnippet(): string {
 <script>
   (function(){
     import("${FPJS_PROXY}/v3/${FPJS_PUBLIC_KEY}.js")
-      .then(function(M){ return M.load(); })
+      .then(function(M){ return M.load({ endpoint: "https://fp.leonix.io" }); })
       .then(function(fp){ return fp.get(); })
       .then(function(r){
         console.log("[leonix] FPJS ok requestId="+r.requestId);
