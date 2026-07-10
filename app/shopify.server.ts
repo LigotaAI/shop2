@@ -27,20 +27,9 @@ function buildFpjsSnippet(): string {
   return `${SNIPPET_MARKER}
 <script>
   (function(){
-    function detectFpjsEndpoint() {
-      return fetch("https://ap.api.fpjs.io/", {
-        method: "HEAD", mode: "no-cors",
-        signal: AbortSignal.timeout(2000)
-      }).then(function(){ return null; })
-        .catch(function(){ return "${FPJS_PROXY}"; });
-    }
-    Promise.all([
-      import("${FPJS_PROXY}/v3/${FPJS_PUBLIC_KEY}.js"),
-      detectFpjsEndpoint()
-    ]).then(function(results){
-      var M = results[0]; var ep = results[1];
-      return M.load(ep ? { endpoint: ep } : {});
-    }).then(function(fp){ return fp.get(); })
+    import("${FPJS_PROXY}/v3/${FPJS_PUBLIC_KEY}.js")
+      .then(function(M){ return M.load(); })
+      .then(function(fp){ return fp.get(); })
       .then(function(r){
         console.log("[leonix] FPJS ok requestId="+r.requestId);
         fetch("/cart/update.js",{
