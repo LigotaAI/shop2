@@ -93,7 +93,7 @@ export default function Index() {
           <InlineStack gap="400" wrap>
             <StatCard label="Total Scored" value={stats.total} />
             <StatCard label="Allow" value={stats.allow} tone="success" />
-            <StatCard label="Review" value={stats.review} tone="warning" />
+            <StatCard label="Review" value={stats.review} tone="caution" />
             <StatCard label="Block" value={stats.block} tone="critical" />
             <StatCard label="Pending" value={stats.pending} />
           </InlineStack>
@@ -132,12 +132,17 @@ export default function Index() {
 
 // ── OrderRow ───────────────────────────────────────────────────────────────────
 
+type SerializedOrderLinkRow = Omit<OrderLinkRow, "created_at" | "updated_at"> & {
+  created_at: string;
+  updated_at: string | null;
+};
+
 function OrderRow({
   order,
   expanded,
   onToggle,
 }: {
-  order: OrderLinkRow;
+  order: SerializedOrderLinkRow;
   expanded: boolean;
   onToggle: () => void;
 }) {
@@ -215,6 +220,55 @@ function OrderRow({
 }
 
 // ── EventDetailPanel ───────────────────────────────────────────────────────────
+
+function OutcomeButtons({ fraudRequestId }: { fraudRequestId: string }) {
+  const fetcher = useFetcher<any>();
+  const [outcome, setOutcome] = useState<string | null>(null);
+  const isLoading = fetcher.state !== "idle";
+
+  useEffect(() => {
+    if (fetcher.data?.outcome) setOutcome(fetcher.data.outcome);
+  }, [fetcher.data]);
+
+  const submit = (value: string) => {
+    fetcher.submit(
+      { outcome: value },
+      {
+        method: "POST",
+        action: `/app/set-outcome/${fraudRequestId}`,
+        encType: "application/json",
+      }
+    );
+  };
+
+  if (outcome === "confirmed_fraud") {
+    return <Badge tone="critical">Confirmed Fraud</Badge>;
+  }
+  if (outcome === "false_positive") {
+    return <Badge tone="success">Marked Legitimate</Badge>;
+  }
+
+  return (
+    <InlineStack gap="200">
+      <Button
+        tone="critical"
+        variant="primary"
+        size="slim"
+        loading={isLoading}
+        onClick={() => submit("confirmed_fraud")}
+      >
+        Confirm Fraud
+      </Button>
+      <Button
+        size="slim"
+        loading={isLoading}
+        onClick={() => submit("false_positive")}
+      >
+        Mark Legitimate
+      </Button>
+    </InlineStack>
+  );
+}
 
 function EventDetailPanel({
   data,
@@ -319,6 +373,13 @@ function EventDetailPanel({
           )}
         </BlockStack>
       )}
+
+      {/* Outcome buttons */}
+      <Divider />
+      <InlineStack gap="300" blockAlign="center">
+        <Text variant="headingSm" as="h3">Merchant Verdict</Text>
+        <OutcomeButtons fraudRequestId={fraudRequestId} />
+      </InlineStack>
 
       {/* Chat */}
       <Divider />
@@ -477,7 +538,7 @@ function StatCard({
 }: {
   label: string;
   value: number;
-  tone?: "success" | "warning" | "critical";
+  tone?: "success" | "caution" | "critical";
 }) {
   return (
     <Box
