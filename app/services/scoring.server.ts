@@ -119,6 +119,7 @@ export async function callFraudScore(
   if (order.isNewCustomer != null)   params.set("is_new_customer",   String(order.isNewCustomer));
   if (order.billingCountry)          params.set("billing_country",   order.billingCountry);
   if (order.shippingCountry)         params.set("shipping_country",  order.shippingCountry);
+  if (order.phone)                   params.set("phone_number",      order.phone);
   const url = `${FRAUD_API_BASE}/api/v1/fp/verify?${params}`;
 
   let lastError: Error | null = null;
